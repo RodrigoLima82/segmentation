@@ -4,7 +4,7 @@
 
 # COMMAND ----------
 
-# MAGIC %md The purpose of this notebook is to generate the features required for our segmentation work using a combination of feature engineering and dimension reduction techniques.
+# MAGIC %md O objetivo deste notebook é gerar as características necessárias para o nosso trabalho de segmentação usando uma combinação de técnicas de engenharia de características e redução de dimensão.
 
 # COMMAND ----------
 
@@ -27,23 +27,29 @@ import matplotlib.pyplot as plt
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 1: Derive Bases Features
+# MAGIC %md ## Passo 1: Derivar Recursos Básicos
 # MAGIC
-# MAGIC With a stated goal of segmenting customer households based on their responsiveness to various promotional efforts, we start by calculating the number of purchase dates (*pdates\_*) and the volume of sales (*amount\_list_*) associated with each promotion item, alone and in combination with one another.  The promotional items considered are:
+# MAGIC Com o objetivo de segmentar os domicílios dos clientes com base em sua receptividade a vários esforços promocionais, começamos calculando o número de datas de compra (*pdates\_*) e o volume de vendas (*amount\_list_*) associados a cada item promocional, sozinho e em combinação com os outros. Os itens promocionais considerados são:
 # MAGIC
-# MAGIC * Campaign targeted products (*campaign\_targeted_*)
-# MAGIC * Private label products (*private\_label_*)
-# MAGIC * InStore-discounted products (*instore\_discount_*)
-# MAGIC * Campaign (retailer-generated) coupon redemptions (*campaign\_coupon\_redemption_*)
-# MAGIC * Manufacturer-generated coupon redemptions (*manuf\_coupon\_redemption_*)
+# MAGIC * Produtos direcionados pela campanha (*campaign\_targeted_*)
+# MAGIC * Produtos de marca própria (*private\_label_*)
+# MAGIC * Produtos com desconto na loja (*instore\_discount_*)
+# MAGIC * Resgates de cupons de campanha (gerados pelo varejista) (*campaign\_coupon\_redemption_*)
+# MAGIC * Resgates de cupons gerados pelo fabricante (*manuf\_coupon\_redemption_*)
 # MAGIC
-# MAGIC The resulting metrics are by no means exhaustive but provide a useful starting point for our analysis:
+# MAGIC As métricas resultantes não são exaustivas, mas fornecem um ponto de partida útil para nossa análise:
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC USE CATALOG rodrigo_catalog;
+# MAGIC USE DATABASE journey;
 
 # COMMAND ----------
 
 # DBTITLE 1,Derive Relevant Metrics
 # MAGIC %sql
-# MAGIC USE journey;
 # MAGIC
 # MAGIC DROP VIEW IF EXISTS household_metrics;
 # MAGIC
@@ -126,9 +132,9 @@ import matplotlib.pyplot as plt
 
 # COMMAND ----------
 
-# MAGIC %md It is assumed that the households included in this dataset were selected based on a minimum level of activity spanning the 711 day period over which data is provided.  That said, different households demonstrate different levels of purchase frequency during his period as well as different levels of overall spend.  In order to normalize these values between households, we'll divide each metric by the total purchase dates or total list amount associated with that household over its available purchase history:
+# MAGIC %md É assumido que os domicílios incluídos neste conjunto de dados foram selecionados com base em um nível mínimo de atividade ao longo do período de 711 dias em que os dados são fornecidos. No entanto, diferentes domicílios demonstram diferentes níveis de frequência de compra durante esse período, bem como diferentes níveis de gastos totais. Para normalizar esses valores entre os domicílios, dividiremos cada métrica pelo total de datas de compra ou pelo valor total da lista associado a esse domicílio ao longo de seu histórico de compras disponível:
 # MAGIC
-# MAGIC **NOTE** Normalizing the data based on total purchase dates and spend as we do in this next step may not be appropriate in all analyses. 
+# MAGIC **NOTA** A normalização dos dados com base nas datas de compra totais e nos gastos, como fazemos nesta próxima etapa, pode não ser apropriada em todas as análises.
 
 # COMMAND ----------
 
@@ -178,11 +184,11 @@ import matplotlib.pyplot as plt
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 2: Examine Distributions
+# MAGIC %md ## Passo 2: Examinar Distribuições
 # MAGIC
-# MAGIC Before proceeding, it's a good idea to examine our features closely to understand their compatibility with clustering techniques we might employ. In general, our preference would be to have standardized data with relatively normal distributions though that's not a hard requirement for every clustering algorithm.
+# MAGIC Antes de prosseguir, é uma boa ideia examinar nossas características de perto para entender sua compatibilidade com as técnicas de agrupamento que podemos utilizar. Em geral, nossa preferência seria ter dados padronizados com distribuições relativamente normais, embora isso não seja um requisito rígido para todos os algoritmos de agrupamento.
 # MAGIC
-# MAGIC To help us examine data distributions, we'll pull our data into a pandas Dataframe.  If our data volume were too large for pandas, we might consider taking a random sample (using the [*sample()*](https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.DataFrame.sample) against the Spark DataFrame) to examine the distributions:
+# MAGIC Para nos ajudar a examinar as distribuições dos dados, vamos extrair nossos dados para um pandas Dataframe. Se o volume de dados fosse muito grande para o pandas, poderíamos considerar a obtenção de uma amostra aleatória (usando o [*sample()*](https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.DataFrame.sample) no DataFrame do Spark) para examinar as distribuições:
 
 # COMMAND ----------
 
@@ -201,7 +207,7 @@ household_features_pd.info()
 
 # COMMAND ----------
 
-# MAGIC %md Notice that we have elected to retrieve the *household_id* field with this dataset.  Unique identifiers such as this will not be passed into the data transformation and clustering work that follows but may be useful in helping us validate the results of that work. By retrieving this information with our features, we can now separate our features and the unique identifier into two separate pandas dataframes where instances in each can easily be reassociated leveraging a shared index value:
+# MAGIC %md Observe que optamos por recuperar o campo *household_id* com este conjunto de dados. Identificadores únicos como este não serão passados para a transformação de dados e o trabalho de agrupamento que segue, mas podem ser úteis para nos ajudar a validar os resultados desse trabalho. Ao recuperar essas informações com nossas características, agora podemos separar nossas características e o identificador único em dois dataframes separados do pandas, onde as instâncias em cada um podem ser facilmente reassociadas usando um valor de índice compartilhado:
 
 # COMMAND ----------
 
@@ -216,7 +222,7 @@ features_pd
 
 # COMMAND ----------
 
-# MAGIC %md Let's now start examining the structure of our features:
+# MAGIC %md Vamos agora começar a examinar a estrutura das nossas características:
 
 # COMMAND ----------
 
@@ -225,7 +231,7 @@ features_pd.describe()
 
 # COMMAND ----------
 
-# MAGIC %md A quick review of the features finds that many have very low means and a large number of zero values (as indicated by the occurrence of zeros at multiple quantile positions).  We should take a closer look at the distribution of our features to make sure we don't have any data distribution problems that will trip us up later:
+# MAGIC %md Uma rápida revisão das características mostra que muitas têm médias muito baixas e um grande número de valores zero (como indicado pela ocorrência de zeros em várias posições de quantil). Devemos dar uma olhada mais de perto na distribuição de nossas características para garantir que não tenhamos problemas de distribuição de dados que possam nos atrapalhar posteriormente:
 
 # COMMAND ----------
 
@@ -255,11 +261,11 @@ for k in range(0,feature_count):
 
 # COMMAND ----------
 
-# MAGIC %md A quick visual inspection shows us that we have *zero-inflated distributions* associated with many of our features.  This is a common challenge when a feature attempts to measure the magnitude of an event that occurs with low frequency.  
+# MAGIC %md Uma rápida inspeção visual mostra que temos distribuições com excesso de zeros associadas a muitas de nossas características. Isso é um desafio comum quando uma característica tenta medir a magnitude de um evento que ocorre com baixa frequência.
 # MAGIC
-# MAGIC There is a growing body of literature describing various techniques for dealing with zero-inflated distributions and even some zero-inflated models designed to work with them.  For our purposes, we will simply separate features with these distributions into two features, one of which will capture the occurrence of the event as a binary (categorical) feature and the other which will capture the magnitude of the event when it occurs:
+# MAGIC Existe uma quantidade crescente de literatura descrevendo várias técnicas para lidar com distribuições com excesso de zeros e até mesmo alguns modelos com excesso de zeros projetados para trabalhar com eles. Para nossos propósitos, simplesmente separaremos as características com essas distribuições em duas características, uma das quais capturará a ocorrência do evento como uma característica binária (categórica) e a outra capturará a magnitude do evento quando ocorrer:
 # MAGIC
-# MAGIC **NOTE** We will label our binary features with a *has\_* prefix to make them more easily identifiable. We expect that if a household has zero purchase dates associated with an event, we'd expect that household also has no sales amount values for that event. With that in mind, we will create a single binary feature for an event and a secondary feature for each of the associated purchase date and amount list values.
+# MAGIC **NOTA** Rotularemos nossas características binárias com o prefixo *has\_* para torná-las mais facilmente identificáveis. Esperamos que se uma família tiver zero datas de compra associadas a um evento, também esperamos que essa família não tenha valores de venda para esse evento. Com isso em mente, criaremos uma única característica binária para um evento e uma característica secundária para cada uma das datas de compra e valores da lista de quantidades associadas.
 
 # COMMAND ----------
 
@@ -374,7 +380,7 @@ features_pd
 
 # COMMAND ----------
 
-# MAGIC %md With our features separated, let's look again at our feature distributions.  We'll start by examining our new binary features:
+# MAGIC %md Com nossas características separadas, vamos olhar novamente as distribuições das nossas características. Vamos começar examinando nossas novas características binárias:
 
 # COMMAND ----------
 
@@ -424,7 +430,7 @@ for k in range(0,b_feature_count):
 
 # COMMAND ----------
 
-# MAGIC %md From the pie charts, it appears many promotional offers are not acted upon. This is typical for most promotional offers, especially those associated with coupons. Individually, we see low uptake on many promotional offers, but when we examine the uptake of multiple promotional offers in combination with each other, the frequency of uptake drops to levels where we might consider ignoring the offers in combination, instead focusing on them individually. We'll hold off on addressing that to turn our attention to our continuous features, many of which are now corrected for zero-inflation:
+# MAGIC %md Pelos gráficos de pizza, parece que muitas ofertas promocionais não são aproveitadas. Isso é típico para a maioria das ofertas promocionais, especialmente aquelas associadas a cupons. Individualmente, vemos baixa adesão a muitas ofertas promocionais, mas quando examinamos a adesão de várias ofertas promocionais em combinação umas com as outras, a frequência de adesão cai para níveis em que podemos considerar ignorar as ofertas em combinação, em vez de focar nelas individualmente. Vamos adiar a abordagem desse assunto para voltar nossa atenção para nossas características contínuas, muitas das quais agora estão corrigidas para a inflação de zeros:
 
 # COMMAND ----------
 
@@ -457,11 +463,11 @@ for k in range(0, c_feature_count):
 
 # COMMAND ----------
 
-# MAGIC %md With the zeros removed from many of our problem features, we now have more standard distributions.  That said, may of those distributions are non-normal (not Gaussian), and Gaussian distributions could be really helpful with many clustering techniques.
+# MAGIC %md Com os zeros removidos de muitas de nossas características problemáticas, agora temos distribuições mais padronizadas. No entanto, muitas dessas distribuições não são normais (não gaussianas), e distribuições gaussianas podem ser realmente úteis com muitas técnicas de agrupamento.
 # MAGIC
-# MAGIC One way to make these distributions more normal is to apply the Box-Cox transformation.  In our application of this transformation to these features (not shown), we found that many of the distributions failed to become much more normal than what is shown here.  So, we'll make use of another transformation which is a bit more assertive, the [quantile transformation](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.quantile_transform.html#sklearn.preprocessing.quantile_transform).
+# MAGIC Uma maneira de tornar essas distribuições mais normais é aplicar a transformação de Box-Cox. Em nossa aplicação dessa transformação a essas características (não mostrada), descobrimos que muitas das distribuições não se tornaram muito mais normais do que o mostrado aqui. Portanto, vamos usar outra transformação que é um pouco mais assertiva, a [transformação de quantil](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.quantile_transform.html#sklearn.preprocessing.quantile_transform).
 # MAGIC
-# MAGIC The quantile transformation calculates the cumulative probability function associated with the data points for a given feature.  This is a fancy way to say that the data for a feature are sorted and a function for calculating the percent rank of a value within the range of observed values is calculated. That percent ranking function provides the basis of mapping the data to a well-known distribution such as a normal distribution. The [exact math](https://www.sciencedirect.com/science/article/abs/pii/S1385725853500125) behind this transformation doesn't have to be fully understood for the utility of this transformation to be observed.  If this is your first introduction to quantile transformations, just know the technique has been around since the 1950s and is heavily used in many academic disciplines:
+# MAGIC A transformação de quantil calcula a função de probabilidade cumulativa associada aos pontos de dados de uma determinada característica. Isso é uma maneira sofisticada de dizer que os dados de uma característica são ordenados e uma função para calcular a classificação percentual de um valor dentro do intervalo de valores observados é calculada. Essa função de classificação percentual fornece a base para mapear os dados para uma distribuição conhecida, como uma distribuição normal. A [matemática exata](https://www.sciencedirect.com/science/article/abs/pii/S1385725853500125) por trás dessa transformação não precisa ser totalmente compreendida para que a utilidade dessa transformação seja observada. Se esta é sua primeira introdução às transformações de quantil, saiba que a técnica existe desde a década de 1950 e é amplamente utilizada em muitas disciplinas acadêmicas:
 
 # COMMAND ----------
 
@@ -507,13 +513,13 @@ for k in range(0,qc_feature_count):
 
 # COMMAND ----------
 
-# MAGIC %md It's important to note that as powerful as the quantile transformation is, it does not magically solve all data problems.  In developing this notebook, we identified several features after transformation where there appeared to be a bimodal distribution to the data.  These features were ones for which we had initially decided not to apply the zero-inflated distribution correction.  Returning to our feature definitions, implementing the correction and rerunning the transform solved the problem for us. That said, we did not correct every transformed distribution where there is a small group of households positioned to the far-left of the distribution.  We decided that we would address only those where about 250+ households fell within that bin.
+# MAGIC %md É importante notar que, por mais poderosa que seja a transformação quantílica, ela não resolve magicamente todos os problemas de dados. Ao desenvolver este notebook, identificamos várias características após a transformação em que parecia haver uma distribuição bimodal dos dados. Essas características eram aquelas para as quais inicialmente decidimos não aplicar a correção de distribuição com inflação de zeros. Ao retornar às nossas definições de características, implementar a correção e executar novamente a transformação resolveu o problema para nós. Dito isso, não corrigimos todas as distribuições transformadas em que há um pequeno grupo de domicílios posicionados à extrema esquerda da distribuição. Decidimos abordar apenas aqueles em que cerca de 250+ domicílios caíram nessa faixa.
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 3: Examine Relationships
+# MAGIC %md ## Passo 3: Examinar Relacionamentos
 # MAGIC
-# MAGIC Now that we have our continuous features aligned with a normal distribution, let's examine the relationship between our feature variables, starting with our continuous features.  Using standard correlation, we can see we have a large number of highly related features.  The multicollinearity captured here, if not addressed, will cause our clustering to overemphasize some aspects of promotion response to the diminishment of others:
+# MAGIC Agora que temos nossas características contínuas alinhadas com uma distribuição normal, vamos examinar a relação entre nossas variáveis de características, começando com nossas características contínuas. Usando a correlação padrão, podemos ver que temos um grande número de características altamente relacionadas. A multicolinearidade capturada aqui, se não for tratada, fará com que nosso agrupamento enfatize demais alguns aspectos da resposta à promoção em detrimento de outros:
 
 # COMMAND ----------
 
@@ -539,40 +545,55 @@ hmap = sns.heatmap(
 
 # COMMAND ----------
 
-# MAGIC %md And what about relationships between our binary features?  Pearson's correlation (used in the heatmap above), doesn't produce valid results when dealing with categorical data. So instead, we'll calculate [Theil's Uncertainty Coefficient](https://en.wikipedia.org/wiki/Uncertainty_coefficient), a metric designed to examine to what degree the value of one binary measure predicts another.  Theil's U falls within a range between 0, where there is no predictive value between the variables, and 1, where there is perfect predictive value. What's really interesting about this metric is that it is **asymmetric** so that the score shows for one binary measure predicts the other but not necessarily the other way around.  This will mean we need to carefully examine the scores in the heatmap below and not assume a symmetry in output around the diagonal:
+# MAGIC %md E quanto às relações entre nossas características binárias? A correlação de Pearson (usada no mapa de calor acima) não produz resultados válidos ao lidar com dados categóricos. Portanto, em vez disso, calcularemos o [Coeficiente de Incerteza de Theil](https://en.wikipedia.org/wiki/Uncertainty_coefficient), uma métrica projetada para examinar em que medida o valor de uma medida binária prevê outra. O U de Theil varia entre 0, onde não há valor preditivo entre as variáveis, e 1, onde há um valor preditivo perfeito. O interessante dessa métrica é que ela é **assimétrica**, ou seja, o escore mostra como uma medida binária prevê a outra, mas não necessariamente o contrário. Isso significa que precisamos examinar cuidadosamente os escores no mapa de calor abaixo e não assumir uma simetria na saída ao redor da diagonal:
 # MAGIC
-# MAGIC **NOTE** The primary author of the *dython* package from which we are taking the metric calculation has [an excellent article](https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9) discussing Theil's U and related metrics.
+# MAGIC **NOTA** O autor principal do pacote *dython* do qual estamos usando o cálculo da métrica tem [um excelente artigo](https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9) discutindo o U de Theil e métricas relacionadas.
 
 # COMMAND ----------
 
 # DBTITLE 1,Examine Relationships between Binary Features
-# generate heatmap with Theil's U
-_ = dython.nominal.associations(
-  features_pd[b_feature_names], 
-  nominal_columns='all',
-  #theil_u=True,
-  figsize=(10,8),
-  cmap='coolwarm',
-  vmax=1.0,
-  vmin=0.0,
-  cbar=False
-  )
+from pyspark.sql.functions import regexp_replace, col
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Convert Pandas DataFrame to Spark DataFrame
+features_df = spark.createDataFrame(features_pd)
+
+# Clean the column by removing non-numeric values or replacing them with appropriate numeric values
+# For example, you can remove non-numeric values using regular expressions
+for feature_name in b_feature_names:
+    features_df = features_df.withColumn(feature_name, regexp_replace(col(feature_name), '[^0-9.]', ''))
+
+# Convert the data type to float
+for feature_name in b_feature_names:
+    features_df = features_df.withColumn(feature_name, features_df[feature_name].cast('float'))
+
+# Convert Spark DataFrame to Pandas DataFrame
+features_pd = features_df.toPandas()
+
+# Generate heatmap with Theil's U
+corr = features_pd[b_feature_names].corr(method='spearman')
+plt.figure(figsize=(10, 8))
+sns.heatmap(corr, cmap='coolwarm', vmax=1.0, vmin=0.0, cbar=False)
+plt.show()
 
 # COMMAND ----------
 
-# MAGIC %md As with our continuous features, we have some problematic relationships between our binary variables that we need to address.  And what about the relationship between the continuous and categorical features? 
+# MAGIC %md Assim como com nossas características contínuas, temos algumas relações problemáticas entre nossas variáveis binárias que precisamos abordar. E quanto à relação entre as características contínuas e categóricas?
 # MAGIC
-# MAGIC We know from how they were derived that a binary feature with a value of 0 will have a NULL/NaN value for its related continuous features and that any real value for a continuous feature will translate into a value of 1 for the associated binary feature. We don't need to calculate a metric to know we have a relationship between these features (though the calculation of a [Correlation Ratio](https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9) might help us if we had any doubts).  So what are we going to do to address these and the previously mentioned relationships in our feature data?
+# MAGIC Sabemos, a partir de como elas foram derivadas, que uma característica binária com um valor de 0 terá um valor NULL/NaN para suas características contínuas relacionadas e que qualquer valor real para uma característica contínua se traduzirá em um valor de 1 para a característica binária associada. Não precisamos calcular uma métrica para saber que temos uma relação entre essas características (embora o cálculo de uma [Razão de Correlação](https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9) possa nos ajudar se tivermos alguma dúvida). Então, o que faremos para lidar com essas relações e as relações mencionadas anteriormente em nossos dados de características?
 # MAGIC
-# MAGIC When dealing with a large number of features, these relationships are typically addressed using dimension reduction techniques. These techniques project the data in such a way that the bulk of the variation in the data is captured by a smaller number of features.  Those features, often referred to as latent factors or principal components (depending on the technique employed) capture the underlying structure of the data that is reflected in the surface-level features, and they do so in a way that the overlapping explanatory power of the features, *i.e.* the multi-collinearity, is removed.
+# MAGIC Ao lidar com um grande número de características, essas relações são normalmente abordadas usando técnicas de redução de dimensionalidade. Essas técnicas projetam os dados de tal forma que a maior parte da variação nos dados é capturada por um número menor de características. Essas características, frequentemente referidas como fatores latentes ou componentes principais (dependendo da técnica empregada), capturam a estrutura subjacente dos dados que é refletida nas características de nível superficial, e o fazem de uma maneira que o poder explicativo sobreposto das características, ou seja, a multicolinearidade, é removido.
 # MAGIC
-# MAGIC So which dimension reduction technique should we use?  **Principal Components Analysis (PCA)** is the most popular of these techniques but it can only be applied to datasets comprised of continuous features. **Mixed Component Analysis (MCA)** is another of these techniques but it can only be applied to datasets with categorical features. **Factor Analysis of Mixed Data (FAMD)** allows us to combine concepts from these two techniques to construct a reduced feature set when our data consists of both continuous and categorical data.  That said, we have a problem with applying FAMD to our feature data.
+# MAGIC Então, qual técnica de redução de dimensionalidade devemos usar? **Análise de Componentes Principais (PCA)** é a mais popular dessas técnicas, mas só pode ser aplicada a conjuntos de dados compostos por características contínuas. **Análise de Componentes Mistas (MCA)** é outra dessas técnicas, mas só pode ser aplicada a conjuntos de dados com características categóricas. **Análise de Fatores de Dados Mistos (FAMD)** nos permite combinar conceitos dessas duas técnicas para construir um conjunto de características reduzido quando nossos dados consistem em dados contínuos e categóricos. Dito isso, temos um problema ao aplicar FAMD aos nossos dados de características.
 # MAGIC
-# MAGIC Typical implementations of both PCA and MCA (and therefore FAMD) require that no missing data values be present in the data.  Simple imputation using mean or median values for continuous features and frequently occurring values for categorical features will not work as the dimension reduction techniques key into the variation in the dataset, and these simple imputations fundamentally alter it. (For more on this, please check out [this excellent video](https://www.youtube.com/watch?v=OOM8_FH6_8o&feature=youtu.be). The video is focused on PCA but the information provided is applicable across all these techniques.)
+# MAGIC Implementações típicas tanto de PCA quanto de MCA (e, portanto, FAMD) exigem que não haja valores de dados ausentes no conjunto de dados. A simples imputação usando valores médios ou medianos para características contínuas e valores frequentemente ocorrentes para características categóricas não funcionará, pois as técnicas de redução de dimensionalidade se baseiam na variação no conjunto de dados, e essas imputações simplesmente alteram fundamentalmente essa variação. (Para mais informações sobre isso, confira [este excelente vídeo](https://www.youtube.com/watch?v=OOM8_FH6_8o&feature=youtu.be). O vídeo está focado em PCA, mas as informações fornecidas são aplicáveis a todas essas técnicas.)
 # MAGIC
-# MAGIC In order to impute the data correctly, we need to examine the distribution of the existing data and leverage relationships between features to impute appropriate values from that distribution in a way that doesn't alter the projections. Work in this space is fairly nacent, but some Statisticians have worked out the mechanics for not only PCA and MCA but also FAMD.  Our challenge is that there are no libraries implementing these techniques in Python, but there are packages for this in R.
+# MAGIC Para imputar os dados corretamente, precisamos examinar a distribuição dos dados existentes e aproveitar as relações entre as características para imputar valores apropriados dessa distribuição de forma que não altere as projeções. O trabalho nesse espaço é bastante recente, mas alguns estatísticos desenvolveram a mecânica não apenas para PCA e MCA, mas também para FAMD. Nosso desafio é que não existem bibliotecas que implementem essas técnicas em Python, mas existem pacotes para isso em R.
 # MAGIC
-# MAGIC So now we need to get our data over to R.  To do this, let's our data as a temporary view with the Spark SQL engine.  This will allow us to query this data from R:
+# MAGIC Agora precisamos transferir nossos dados para o R. Para fazer isso, vamos criar uma visualização temporária dos nossos dados com o mecanismo Spark SQL. Isso nos permitirá consultar esses dados a partir do R:
 
 # COMMAND ----------
 
@@ -589,7 +610,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md We will now prepare our R environment by loading the packages required for our work.  The [FactoMineR](https://www.rdocumentation.org/packages/FactoMineR/versions/2.4) package provides us with the required FAMD functionality while the [missMDA](https://www.rdocumentation.org/packages/missMDA/versions/1.18) package provides us with imputation capabilities:
+# MAGIC %md Agora iremos preparar nosso ambiente R carregando os pacotes necessários para o nosso trabalho. O pacote [FactoMineR](https://www.rdocumentation.org/packages/FactoMineR/versions/2.4) nos fornece a funcionalidade FAMD necessária, enquanto o pacote [missMDA](https://www.rdocumentation.org/packages/missMDA/versions/1.18) nos fornece capacidades de imputação:
 
 # COMMAND ----------
 
@@ -600,7 +621,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md And now we can pull our data into R.  Notice that we retrieve the data to a SparkR DataFrame before collecting it to a local R data frame:
+# MAGIC %md Agora podemos trazer nossos dados para o R. Observe que recuperamos os dados para um SparkR DataFrame antes de coletá-los em um data frame R local:
 
 # COMMAND ----------
 
@@ -618,7 +639,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md Looks like the data came across fine, but we need to examine how the binary features have been translated.  FactoMiner and missMDA require that categorical features be identified as [*factor* types](https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/factor) and here we can see that they are coming across as characters:
+# MAGIC %md Parece que os dados foram transferidos corretamente, mas precisamos examinar como as características binárias foram traduzidas. O FactoMiner e o missMDA exigem que as características categóricas sejam identificadas como tipos [*factor*](https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/factor) e aqui podemos ver que elas estão sendo apresentadas como caracteres:
 
 # COMMAND ----------
 
@@ -629,7 +650,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md To convert our categorical features to factors, we apply a quick conversion:
+# MAGIC %md Para converter nossas características categóricas em fatores, aplicamos uma conversão rápida:
 
 # COMMAND ----------
 
@@ -642,7 +663,18 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md Now that the data is structured the right way for our analysis, we can begin the work of performing FAMD. Our first step is to determine the number of principal components required. The missMDA package provides the *estim_ncpFAMD* method for just this purpose, but please note that this routine **takes a long time to complete**.  We've include the code we used to run it but have commented it out and replaced it with the result it eventually landed upon during our run:
+# MAGIC %md Agora que os dados estão estruturados da maneira correta para nossa análise, podemos começar o trabalho de realizar o FAMD. Nosso primeiro passo é determinar o número de componentes principais necessários. O pacote missMDA fornece o método *estim_ncpFAMD* para esse propósito, mas observe que esse procedimento **demora muito para ser concluído**. Incluímos o código que usamos para executá-lo, mas o comentamos e substituímos pelo resultado que ele eventualmente encontrou durante nossa execução:
+
+# COMMAND ----------
+
+# MAGIC %r
+# MAGIC install.packages("devtools")
+# MAGIC devtools::install_version("Rserve")
+
+# COMMAND ----------
+
+# MAGIC %r
+# MAGIC install.packages("missMDA")
 
 # COMMAND ----------
 
@@ -661,7 +693,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md With the number of principal components determined, we can now impute the missing values.  Please note that FAMD, like both PCA and MCA, require features to be standardized.  The mechanisms for this differs based on whether a feature is continuous or categorical.  The *imputeFAMD* method provides functionality to tackle this with appropriate setting of the *scale* argument:
+# MAGIC %md Com o número de componentes principais determinado, agora podemos imputar os valores ausentes. Por favor, observe que o FAMD, assim como o PCA e o MCA, requer que as variáveis sejam padronizadas. Os mecanismos para isso diferem dependendo se a variável é contínua ou categórica. O método *imputeFAMD* fornece funcionalidade para lidar com isso, com a configuração apropriada do argumento *scale*:
 
 # COMMAND ----------
 
@@ -692,12 +724,15 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md Each principal component generated by the FAMD accounts for a percent of the variance found in the overall dataset.  The percent for each principal component, identified as dimensions 1 through 8, are captured in the FAMD output along with the cumulative variance accounted for by the principal components:
+# MAGIC %md Cada componente principal gerado pelo FAMD representa uma porcentagem da variância encontrada no conjunto de dados geral. A porcentagem de cada componente principal, identificado como dimensões 1 a 8, é capturada na saída do FAMD juntamente com a variância acumulada pelos componentes principais:
 
 # COMMAND ----------
 
 # DBTITLE 1,Plot Variance Captured by Components
 # MAGIC %r
+# MAGIC if (!requireNamespace("factoextra", quietly = TRUE)) {
+# MAGIC   install.packages("factoextra")
+# MAGIC }
 # MAGIC
 # MAGIC library("ggplot2")
 # MAGIC library("factoextra")
@@ -707,7 +742,7 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md Reviewing this output, we can see that the first two dimensions (principal components) account for about 50% of the variance, allowing us to get a sense of the structure of our data through a 2-D visualization:
+# MAGIC %md Analisando essa saída, podemos ver que as duas primeiras dimensões (componentes principais) representam cerca de 50% da variância, permitindo-nos ter uma ideia da estrutura dos nossos dados por meio de uma visualização em 2-D:
 
 # COMMAND ----------
 
@@ -725,11 +760,11 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# MAGIC %md Graphing our households by the first and second principal components indicates there may be some nice clusters of households within the data (as indicated by the grouping patterns in the chart). At a high-level, our data may indicate a couple large, we'll separated clusters, while at a lower-level, there may be some finer-grained clusters with overlapping boundaries within the larger groupings.
+# MAGIC %md Ao plotar nossos domicílios pelos primeiros e segundos componentes principais, podemos observar que pode haver alguns agrupamentos interessantes de domicílios nos dados (conforme indicado pelos padrões de agrupamento no gráfico). Em um nível mais alto, nossos dados podem indicar alguns grandes agrupamentos bem separados, enquanto em um nível mais baixo, pode haver alguns agrupamentos mais refinados com fronteiras sobrepostas dentro dos agrupamentos maiores.
 # MAGIC
-# MAGIC There are [many other types of visualization and analyses we can perform](http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/115-famd-factor-analysis-of-mixed-data-in-r-essentials/) on the FAMD results to gain a better understanding of how our base features are represented in each of the principal components, but we've got what we need for the purpose of clustering. We will now focus on getting the data from R and back into Python.
+# MAGIC Existem [muitos outros tipos de visualizações e análises que podemos realizar](http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/115-famd-factor-analysis-of-mixed-data-in-r-essentials/) nos resultados do FAMD para obter uma melhor compreensão de como nossas características base são representadas em cada um dos componentes principais, mas temos o que precisamos para fins de agrupamento. Agora vamos nos concentrar em obter os dados do R de volta para o Python.
 # MAGIC
-# MAGIC To get started, let's retrieve principal component values for each of our households:
+# MAGIC Para começar, vamos recuperar os valores dos componentes principais para cada um dos nossos domicílios:
 
 # COMMAND ----------
 
@@ -745,29 +780,42 @@ spark.createDataFrame(trans_features_pd).createOrReplaceTempView('trans_features
 
 # COMMAND ----------
 
-# DBTITLE 1,Persist Eigenvalues to Delta
 # MAGIC %r
 # MAGIC
-# MAGIC df.out <- createDataFrame(df.famd)
-# MAGIC
-# MAGIC write.df(df.out, source = "delta", path = "/tmp/completejourney/silver/features_finalized", mode="overwrite", overwriteSchema="true")
+# MAGIC write.csv(df.famd, "df_famd.csv", row.names = FALSE)
+
+# COMMAND ----------
+
+import pandas as pd
+
+df_famd = pd.read_csv('df_famd.csv')
+df_famd.head()
+
+# COMMAND ----------
+
+# DBTITLE 1,Persist Eigenvalues to Delta
+# Convert df_famd to Spark DataFrame
+df_famd_spark = spark.createDataFrame(df_famd)
+
+# Write df_famd_spark to the 'rodrigo_catalog.journey.features_finalized' table
+df_famd_spark.write.format("delta").mode("overwrite").saveAsTable("rodrigo_catalog.journey.features_finalized")
 
 # COMMAND ----------
 
 # DBTITLE 1,Retrieve Eigenvalues in Python
 display(
-  spark.table('DELTA.`/tmp/completejourney/silver/features_finalized/`')
+  spark.table('rodrigo_catalog.journey.features_finalized')
   )
 
 # COMMAND ----------
 
-# MAGIC %md And now let's examine the relationships between these features:
+# MAGIC %md E agora vamos examinar as relações entre essas características:
 
 # COMMAND ----------
 
 # DBTITLE 1,Examine Relationships between Reduced Dimensions
 # generate correlations between features
-famd_features_corr = spark.table('DELTA.`/tmp/completejourney/silver/features_finalized/`').drop('household_id').toPandas().corr()
+famd_features_corr = spark.table('rodrigo_catalog.journey.features_finalized').drop('household_id').toPandas().corr()
 
 # assemble a mask to remove top-half of heatmap
 top_mask = np.zeros(famd_features_corr.shape, dtype=bool)
@@ -787,4 +835,4 @@ hmap = sns.heatmap(
 
 # COMMAND ----------
 
-# MAGIC %md With multicollinearity addressed through our reduced feature set, we can now proceed with clustering.
+# MAGIC %md Com a multicolinearidade abordada por meio do nosso conjunto de recursos reduzido, agora podemos prosseguir com a clusterização.

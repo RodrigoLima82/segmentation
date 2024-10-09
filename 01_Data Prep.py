@@ -4,17 +4,15 @@
 
 # COMMAND ----------
 
-# MAGIC %md The purpose of this notebook is to access and prepare the data required for our segmentation work. 
+# MAGIC %md O objetivo deste notebook é acessar e preparar os dados necessários para o nosso trabalho de segmentação.
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 1: Access the Data
-# MAGIC 
-# MAGIC The purpose of this exercise is to demonstrate how a Promotions Management team interested in segmenting customer households based on promotion responsiveness might perform the analytics portion of their work.  The dataset we will use has been made available by Dunnhumby via Kaggle and is referred to as [*The Complete Journey*](https://www.kaggle.com/frtgnn/dunnhumby-the-complete-journey). It consists of numerous files identifying household purchasing activity in combination with various promotional campaigns for about 2,500 households over a nearly 2 year period. The schema of the overall dataset may be represented as follows:
-# MAGIC 
+# MAGIC %md ## Passo 1: Acessar os Dados
+# MAGIC
+# MAGIC O objetivo deste acelerador é demonstrar como uma equipe de Gerenciamento de Promoções interessada em segmentar os domicílios dos clientes com base na responsividade às promoções pode realizar a análise. O conjunto de dados que usaremos foi disponibilizado pela Dunnhumby por meio do Kaggle e é chamado de [*The Complete Journey*](https://www.kaggle.com/frtgnn/dunnhumby-the-complete-journey). Ele consiste em vários arquivos que identificam a atividade de compra dos domicílios em combinação com várias campanhas promocionais para cerca de 2.500 domicílios ao longo de quase 2 anos. O esquema do conjunto de dados geral pode ser representado da seguinte forma:
+# MAGIC
 # MAGIC <img src='https://brysmiwasb.blob.core.windows.net/demos/images/segmentation_journey_schema3.png' width=500>
-# MAGIC 
-# MAGIC To make this data available for our analysis, you can download, extract and load to the permanent location of the *bronze* folder of a [cloud-storage mount point](https://docs.databricks.com/data/databricks-file-system.html#mount-object-storage-to-dbfs) named */mnt/completejourney*.  We have automated this downloading step for you and use a */tmp/completejourney* storage path throughout this accelerator.  
 
 # COMMAND ----------
 
@@ -22,7 +20,7 @@
 
 # COMMAND ----------
 
-# MAGIC %md From there, we might prepare the data as follows:
+# MAGIC %md A partir daí, podemos preparar os dados da seguinte forma:
 
 # COMMAND ----------
 
@@ -34,10 +32,10 @@ from pyspark.sql.functions import min, max
 
 # DBTITLE 1,Create Database
 # MAGIC %sql
-# MAGIC 
-# MAGIC DROP DATABASE IF EXISTS journey CASCADE;
-# MAGIC CREATE DATABASE journey;
-# MAGIC USE journey;
+# MAGIC
+# MAGIC DROP DATABASE IF EXISTS rodrigo_catalog.journey CASCADE;
+# MAGIC CREATE DATABASE rodrigo_catalog.journey;
+# MAGIC USE rodrigo_catalog.journey;
 
 # COMMAND ----------
 
@@ -50,7 +48,7 @@ from pyspark.sql.functions import min, max
 
 # DBTITLE 1,Transactions
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS transactions')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.transactions')
 
 # expected structure of the file
 transactions_schema = StructType([
@@ -80,19 +78,12 @@ transactions_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/transactions')
+    .saveAsTable('rodrigo_catalog.journey.transactions')
   )
 
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE transactions 
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/transactions'
-    ''')
-
-# show data
+  # show data
 display(
-  spark.table('transactions')
+  spark.table('rodrigo_catalog.journey.transactions')
   )
 
 # COMMAND ----------
@@ -124,26 +115,19 @@ products_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/products')
+    .saveAsTable('rodrigo_catalog.journey.products')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE products
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/products'
-    ''')
 
 # show data
 display(
-  spark.table('products')
+  spark.table('rodrigo_catalog.journey.products')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Households
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS households')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.households')
 
 # expected structure of the file
 households_schema = StructType([
@@ -240,26 +224,19 @@ composition_lookup.createOrReplaceTempView('composition_lookup')
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/households')
+    .saveAsTable('rodrigo_catalog.journey.households')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE households 
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/households'
-    ''')
 
 # show data
 display(
-  spark.table('households')
+  spark.table('rodrigo_catalog.journey.households')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Coupons
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS coupons')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.coupons')
 
 # expected structure of the file
 coupons_schema = StructType([
@@ -280,26 +257,19 @@ coupons_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/coupons')
+    .saveAsTable('rodrigo_catalog.journey.coupons')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE coupons
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/coupons'
-    ''')
 
 # show data
 display(
-  spark.table('coupons')
+  spark.table('rodrigo_catalog.journey.coupons')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Campaigns
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS campaigns')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.campaigns')
 
 # expected structure of the file
 campaigns_schema = StructType([
@@ -321,26 +291,19 @@ campaigns_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/campaigns')
+    .saveAsTable('rodrigo_catalog.journey.campaigns')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE campaigns
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/campaigns'
-    ''')
 
 # show data
 display(
-  spark.table('campaigns')
+  spark.table('rodrigo_catalog.journey.campaigns')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Coupon Redemptions
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS coupon_redemptions')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.coupon_redemptions')
 
 # expected structure of the file
 coupon_redemptions_schema = StructType([
@@ -362,26 +325,19 @@ coupon_redemptions_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/coupon_redemptions')
+    .saveAsTable('rodrigo_catalog.journey.coupon_redemptions')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE coupon_redemptions
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/coupon_redemptions'
-    ''')
 
 # show data
 display(
-  spark.table('coupon_redemptions')
+  spark.table('rodrigo_catalog.journey.coupon_redemptions')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Campaign-Household Relationships
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS campaigns_households')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.campaigns_households')
 
 # expected structure of the file
 campaigns_households_schema = StructType([
@@ -402,26 +358,19 @@ campaigns_households_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/campaigns_households')
+    .saveAsTable('rodrigo_catalog.journey.campaigns_households')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE campaigns_households
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/campaigns_households'
-    ''')
 
 # show data
 display(
-  spark.table('campaigns_households')
+  spark.table('rodrigo_catalog.journey.campaigns_households')
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Causal Data
 # delete the old table if needed
-_ = spark.sql('DROP TABLE IF EXISTS causal_data')
+_ = spark.sql('DROP TABLE IF EXISTS rodrigo_catalog.journey.causal_data')
 
 # expected structure of the file
 causal_data_schema = StructType([
@@ -444,36 +393,36 @@ causal_data_schema = StructType([
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema', 'true')
-    .save('/tmp/completejourney/silver/causal_data')
+    .saveAsTable('rodrigo_catalog.journey.causal_data')
   )
-
-# create table object to make delta lake queryable
-_ = spark.sql('''
-    CREATE TABLE causal_data
-    USING DELTA 
-    LOCATION '/tmp/completejourney/silver/causal_data'
-    ''')
 
 # show data
 display(
-  spark.table('causal_data')
+  spark.table('rodrigo_catalog.journey.causal_data')
   )
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 2: Adjust Transactional Data
-# MAGIC 
-# MAGIC With the raw data loaded, we need to make some adjustments to the transactional data.  While this dataset is focused on retailer-managed campaigns, the inclusion of coupon discount matching information would indicate the transaction data reflects discounts originating from both retailer- and manufacturer-generated coupons.  Without the ability to link a specific product-transaction to a specific coupon (when a redemption takes place), we will assume that any *coupon_discount* value associated with a non-zero *coupon_discount_match* value originates from a manufacturer's coupon.  All other coupon discounts will be assumed to be from retailer-generated coupons.  
-# MAGIC 
-# MAGIC In addition to the separation of retailer and manufacturer coupon discounts, we will calculate a list amount for a product as the sales amount minus all discounts applied:
+# MAGIC %md ## Passo 2: Ajustar Dados Transacionais
+# MAGIC
+# MAGIC Com os dados brutos carregados, precisamos fazer alguns ajustes nos dados transacionais. Embora este conjunto de dados esteja focado em campanhas gerenciadas pelo varejista, a inclusão de informações de correspondência de desconto de cupom indicaria que os dados de transação refletem descontos originados tanto de cupons gerados pelo varejista quanto pelo fabricante. Sem a capacidade de vincular um produto-transação específico a um cupom específico (quando ocorre um resgate), assumiremos que qualquer valor de *coupon_discount* associado a um valor de *coupon_discount_match* diferente de zero origina-se de um cupom do fabricante. Todos os outros descontos de cupom serão assumidos como sendo de cupons gerados pelo varejista.
+# MAGIC
+# MAGIC Além da separação dos descontos de cupom do varejista e do fabricante, calcularemos um valor de lista para um produto como o valor de vendas menos todos os descontos aplicados:
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC USE CATALOG rodrigo_catalog;
+# MAGIC USE DATABASE journey;
 
 # COMMAND ----------
 
 # DBTITLE 1,Adjusted Transactions
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC DROP TABLE IF EXISTS transactions_adj;
-# MAGIC 
+# MAGIC
 # MAGIC CREATE TABLE transactions_adj
 # MAGIC USING DELTA
 # MAGIC AS
@@ -523,15 +472,15 @@ display(
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 3: Explore the Data
-# MAGIC 
-# MAGIC The exact start and end dates for the records in this dataset are unknown.  Instead, days are represented by values between 1 and 711 which would seem to indicate the days since the beginning of the dataset:
+# MAGIC %md ## Passo 3: Explorar os Dados
+# MAGIC
+# MAGIC As datas exatas de início e fim dos registros neste conjunto de dados são desconhecidas. Em vez disso, os dias são representados por valores entre 1 e 711, o que parece indicar os dias desde o início do conjunto de dados:
 
 # COMMAND ----------
 
 # DBTITLE 1,Household Data in Transactions
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC SELECT
 # MAGIC   COUNT(DISTINCT household_id) as uniq_households_in_transactions,
 # MAGIC   MIN(day) as first_day,
@@ -540,13 +489,13 @@ display(
 
 # COMMAND ----------
 
-# MAGIC %md A primary focus of our analysis will be how households respond to various retailer campaigns which we can assume include targeted mailers and coupons. Not every household in the transaction dataset has been targeted by a campaign but every household which has been targeted is represented in the transaction dataset:
+# MAGIC %md Um foco principal da nossa análise será como os domicílios respondem a várias campanhas de varejistas, que podemos assumir incluir mala direta direcionada e cupons. Nem todos os domicílios no conjunto de dados de transações foram alvo de uma campanha, mas todos os domicílios que foram alvo estão representados no conjunto de dados de transações:
 
 # COMMAND ----------
 
 # DBTITLE 1,Household Data in Campaigns
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC SELECT
 # MAGIC   COUNT(DISTINCT a.household_id) as uniq_households_in_transactions,
 # MAGIC   COUNT(DISTINCT b.household_id) as uniq_households_in_campaigns,
@@ -557,17 +506,17 @@ display(
 
 # COMMAND ----------
 
-# MAGIC %md When coupons are sent to a household as part of a campaign, the data indicate which products were associated with these coupons. The *coupon_redemptions* table provides us details about which of these coupons have been redeemed on which days by a given household. However, the coupon itself is not identified on a given transaction line item.
-# MAGIC 
-# MAGIC Instead of working through the association of specific line items back to coupon redemptions and thereby tying transactions to specific campaigns, we've elected to simply attribute all line items associated with products promoted by campaigns as affected by the campaign whether or not a coupon redemption occurred.  This is a bit sloppy but we are doing this to simplify our overall logic. In a real-world analysis of these data, **this is a simplification that should be revisited**. In addition, please note that we are not examining the influence of in-store displays and store-specific fliers (as captured in the *causal_data* table).  Again, we are doing this in order to simplify our analysis.
-# MAGIC 
-# MAGIC The logic shown here illustrates how we will associate campaigns with product purchases and will be reproduced in our feature engineering notebook:
+# MAGIC %md Quando cupons são enviados para um domicílio como parte de uma campanha, os dados indicam quais produtos estão associados a esses cupons. A tabela *coupon_redemptions* nos fornece detalhes sobre quais desses cupons foram resgatados em quais dias por um determinado domicílio. No entanto, o próprio cupom não é identificado em um determinado item de linha de transação.
+# MAGIC
+# MAGIC Em vez de trabalhar na associação de itens de linha específicos de volta aos resgates de cupons e, assim, vincular transações a campanhas específicas, optamos por simplesmente atribuir todos os itens de linha associados a produtos promovidos por campanhas como afetados pela campanha, independentemente de um resgate de cupom ter ocorrido. Isso é um pouco impreciso, mas estamos fazendo isso para simplificar nossa lógica geral. Em uma análise do mundo real desses dados, **essa é uma simplificação que deve ser revista**. Além disso, observe que não estamos examinando a influência de displays na loja e folhetos específicos da loja (capturados na tabela *causal_data*). Novamente, estamos fazendo isso para simplificar nossa análise.
+# MAGIC
+# MAGIC A lógica mostrada aqui ilustra como associaremos campanhas a compras de produtos e será reproduzida em nosso caderno de engenharia de recursos:
 
 # COMMAND ----------
 
 # DBTITLE 1,Transaction Line Items Flagged for Promotional Influences
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC WITH 
 # MAGIC     targeted_products_by_household AS (
 # MAGIC       SELECT DISTINCT
@@ -598,15 +547,15 @@ display(
 
 # COMMAND ----------
 
-# MAGIC %md One last thing to note, this dataset includes demographic data for only about 800 of the 2,500 households found in the transaction history. These data will be useful for profiling purposes, but we need to be careful before drawing conclusions from such a small sample of the data.
-# MAGIC 
-# MAGIC Similarly, have no details on how the 2,500 households in the data set were selected.  All conclusions drawn from our analysis should be viewed with a recognition of this limitation:
+# MAGIC %md Uma última coisa a ser observada, este conjunto de dados inclui dados demográficos apenas para cerca de 800 dos 2.500 domicílios encontrados no histórico de transações. Esses dados serão úteis para fins de perfil, mas precisamos ter cuidado antes de tirar conclusões de uma amostra tão pequena dos dados.
+# MAGIC
+# MAGIC Da mesma forma, não temos detalhes sobre como os 2.500 domicílios no conjunto de dados foram selecionados. Todas as conclusões tiradas de nossa análise devem ser vistas levando em consideração essa limitação:
 
 # COMMAND ----------
 
 # DBTITLE 1,Households with Demographic Data
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC SELECT
 # MAGIC   COUNT(DISTINCT a.household_id) as uniq_households_in_transactions,
 # MAGIC   COUNT(DISTINCT b.household_id) as uniq_households_in_campaigns,

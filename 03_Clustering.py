@@ -4,7 +4,7 @@
 
 # COMMAND ----------
 
-# MAGIC %md The purpose of this notebook is to identify potential segments for our households using a clustering technique. 
+# MAGIC %md O objetivo deste notebook é identificar segmentos potenciais para nossos domicílios usando uma técnica de agrupamento.
 
 # COMMAND ----------
 
@@ -29,9 +29,9 @@ import seaborn as sns
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 1: Retrieve Features
-# MAGIC 
-# MAGIC Following the work performed in our last notebook, our households are now identified by a limited number of features that capture the variation found in our original feature set.  We can retrieve these features as follows:
+# MAGIC %md ## Passo 1: Recuperar Características
+# MAGIC
+# MAGIC Seguindo o trabalho realizado em nosso último notebook, nossos domicílios agora são identificados por um número limitado de características que capturam a variação encontrada em nosso conjunto de características original. Podemos recuperar essas características da seguinte forma:
 
 # COMMAND ----------
 
@@ -43,7 +43,7 @@ dbutils.fs.mkdirs("/tmp/completejourney/gold/")
 
 # DBTITLE 1,Retrieve Transformed Features
 # retrieve household (transformed) features
-household_X_pd = spark.table('DELTA.`/tmp/completejourney/silver/features_finalized/`').toPandas()
+household_X_pd = spark.table('rodrigo_catalog.journey.features_finalized').toPandas()
 
 # remove household ids from dataframe
 X = household_X_pd.drop(['household_id'], axis=1)
@@ -52,9 +52,9 @@ household_X_pd
 
 # COMMAND ----------
 
-# MAGIC %md The exact meaning of each feature is very difficult to articulate given the complex transformations used in their engineering.  Still, they can be used to perform clustering.  (Through profiling which we will perform in our next notebook, we can then retrieve insight into the nature of each cluster.)
-# MAGIC 
-# MAGIC As a first step, let's visualize our data to see if any natural groupings stand out.  Because we are working with a hyper-dimensional space, we cannot perfectly visualize our data but with a 2-D representation (using our first two principal component features), we can see there is a large sizeable cluster in our data and potentially a few additional, more loosely organized clusters:
+# MAGIC %md O significado exato de cada recurso é muito difícil de articular devido às complexas transformações utilizadas em sua engenharia. Ainda assim, eles podem ser usados para realizar clustering. (Através de um perfil que iremos realizar em nosso próximo notebook, poderemos obter insights sobre a natureza de cada cluster.)
+# MAGIC
+# MAGIC Como primeiro passo, vamos visualizar nossos dados para ver se algum agrupamento natural se destaca. Como estamos trabalhando com um espaço hiperdimensional, não podemos visualizar perfeitamente nossos dados, mas com uma representação em 2D (usando nossos dois primeiros recursos principais), podemos ver que há um grande cluster considerável em nossos dados e potencialmente alguns clusters adicionais, mais vagamente organizados:
 
 # COMMAND ----------
 
@@ -63,24 +63,24 @@ fig, ax = plt.subplots(figsize=(10,8))
 
 _ = sns.scatterplot(
   data=X,
-  x='Dim_1',
-  y='Dim_2',
+  x='Dim.1',
+  y='Dim.2',
   alpha=0.5,
   ax=ax
   )
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 2: K-Means Clustering
-# MAGIC 
-# MAGIC Our first attempt at clustering with make use of the K-means algorithm. K-means is a simple, popular algorithm for dividing instances into clusters around a pre-defined number of *centroids* (cluster centers).  The algorithm works by generating an initial set of points within the space to serve as cluster centers.  Instances are then associated with the nearest of these points to form a cluster, and the true center of the resulting cluster is re-calculated.  The new centroids are then used to re-enlist cluster members, and the process is repeated until a stable solution is generated (or until the maximum number of iterations is exhausted). A quick demonstration run of the algorithm may produce a result as follows:
+# MAGIC %md ## Passo 2: Agrupamento K-Means
+# MAGIC
+# MAGIC Nossa primeira tentativa de agrupamento fará uso do algoritmo K-means. O K-means é um algoritmo simples e popular para dividir instâncias em clusters ao redor de um número pré-definido de *centróides* (centros de cluster). O algoritmo funciona gerando um conjunto inicial de pontos dentro do espaço para servir como centros de cluster. As instâncias são então associadas ao ponto mais próximo desses pontos para formar um cluster, e o verdadeiro centro do cluster resultante é recalculado. Os novos centróides são então usados para reagrupar os membros do cluster, e o processo é repetido até que uma solução estável seja gerada (ou até que o número máximo de iterações seja esgotado). Uma rápida execução de demonstração do algoritmo pode produzir um resultado como o seguinte:
 
 # COMMAND ----------
 
 # DBTITLE 1,Demonstrate Cluster Assignment
 # set up the experiment that mlflow logs runs to: an experiment in the user's personal workspace folder
 useremail = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-experiment_name = f"/Users/{useremail}/segmentation"
+experiment_name = f"/Users/{useremail}/segmentation_rodrigo"
 mlflow.set_experiment(experiment_name) 
 
 # initial cluster count
@@ -107,8 +107,8 @@ labeled_X_pd = (
 fig, ax = plt.subplots(figsize=(10,8))
 sns.scatterplot(
   data=labeled_X_pd,
-  x='Dim_1',
-  y='Dim_2',
+  x='Dim.1',
+  y='Dim.2',
   hue='cluster',
   palette=[cm.nipy_spectral(float(i) / initial_n) for i in range(initial_n)],
   legend='brief',
@@ -119,13 +119,13 @@ _ = ax.legend(loc='lower right', ncol=1, fancybox=True)
 
 # COMMAND ----------
 
-# MAGIC %md Our initial model run demonstrates the mechanics of generating a K-means clustering solution, but it also demonstrates some of the shortcomings of the approach.  First, we need to specify the number of clusters.  Setting the value incorrectly can force the creation of numerous smaller clusters or just a few larger clusters, neither of which may reflect what we may observe to be the more immediate and natural structure inherent to the data.
-# MAGIC 
-# MAGIC Second, the results of the algorithm are highly dependent on the centroids with which it is initialized. The use of the K-means++ initialization algorithm addresses some of these problems by better ensuring that initial centroids are dispersed throughout the populated space, but there is still an element of randomness at play in these selections that can have big consequences for our results.
-# MAGIC 
-# MAGIC To begin working through these challenges, we will generate a large number of model runs over a range of potential cluster counts. For each run, we will calculate the sum of squared distances between members and assigned cluster centroids (*inertia*) as well as a secondary metric (*silhouette score*) which provides a combined measure of inter-cluster cohesion and intra-cluster separation (ranging between -1 and 1 with higher values being better). Because of the large number of iterations we will perform, we will distribute this work across our Databricks cluster so that it can be concluded in a timely manner:
-# MAGIC 
-# MAGIC **NOTE** We are using a Spark RDD as a crude means of exhaustively searching our parameter space in a distributed manner. This is an simple technique frequently used for efficient searches over a defined range of values.
+# MAGIC %md Nossa execução inicial do modelo demonstra a mecânica de gerar uma solução de agrupamento K-means, mas também demonstra algumas das limitações desse método. Primeiro, precisamos especificar o número de clusters. Definir o valor incorretamente pode resultar na criação de vários clusters menores ou apenas alguns clusters maiores, o que pode não refletir a estrutura mais imediata e natural dos dados.
+# MAGIC
+# MAGIC Segundo, os resultados do algoritmo dependem muito dos centróides com os quais ele é inicializado. O uso do algoritmo de inicialização K-means++ aborda alguns desses problemas, garantindo melhor que os centróides iniciais estejam dispersos por todo o espaço populado, mas ainda há um elemento de aleatoriedade nessas seleções que pode ter grandes consequências para nossos resultados.
+# MAGIC
+# MAGIC Para começar a lidar com esses desafios, geraremos um grande número de execuções do modelo em uma variedade de contagens de clusters potenciais. Para cada execução, calcularemos a soma dos quadrados das distâncias entre os membros e os centróides atribuídos (*inertia*), bem como uma métrica secundária (*silhouette score*) que fornece uma medida combinada de coesão inter-cluster e separação intra-cluster (variando entre -1 e 1, sendo valores mais altos melhores). Devido ao grande número de iterações que faremos, distribuiremos esse trabalho em nosso cluster Databricks para que possa ser concluído em tempo hábil:
+# MAGIC
+# MAGIC **NOTA** Estamos usando um RDD do Spark como uma técnica simples para pesquisar exaustivamente nosso espaço de parâmetros de maneira distribuída. Essa é uma técnica comumente usada para pesquisas eficientes em uma faixa definida de valores.
 
 # COMMAND ----------
 
@@ -162,11 +162,9 @@ results_pd = (
 # remove broadcast set from workers
 X_broadcast.unpersist()
 
-display(results_pd)
-
 # COMMAND ----------
 
-# MAGIC %md Plotting inertia relative to n, *i.e.* the target number of clusters, we can see that the total sum of squared distances between cluster members and cluster centers decreases as we increase the number of clusters in our solution.  Our goal is not to drive inertia to zero (which would be achieved if we made each member the center of its own, 1-member cluster) but instead to identify the point in the curve where the incremental drop in inertia is diminished.  In our plot, we might identify this point as occurring somewhere between 2 and 6 clusters:
+# MAGIC %md Plotando a inércia em relação a n, ou seja, o número alvo de clusters, podemos ver que a soma total das distâncias quadradas entre os membros do cluster e os centros do cluster diminui à medida que aumentamos o número de clusters em nossa solução. Nosso objetivo não é reduzir a inércia a zero (o que seria alcançado se tornássemos cada membro o centro de seu próprio cluster com apenas 1 membro), mas sim identificar o ponto na curva onde a queda incremental na inércia é diminuída. Em nosso gráfico, podemos identificar esse ponto como ocorrendo em algum lugar entre 2 e 6 clusters:
 
 # COMMAND ----------
 
@@ -175,24 +173,19 @@ display(results_pd)
 
 # COMMAND ----------
 
-# MAGIC %md Interpreting the *elbow chart*/*scree plot* of inertia *vs.* n is fairly subjective, and as such, it can be helpful to examine how another metric behaves relative to our cluster count.  Plotting silhouette score relative to n provides us the opportunity to identify a peak (*knee*) beyond which the score declines.  The challenge, as before, is exactly determining the location of that peak, especially given that the silhouette scores for our iterations vary much more than our inertia scores:
+# MAGIC %md Interpretar o gráfico do cotovelo ou gráfico de inércia em relação a n é bastante subjetivo, e, como tal, pode ser útil examinar como outra métrica se comporta em relação ao número de clusters. Plotar o escore de silhueta em relação a n nos oferece a oportunidade de identificar um pico (joelho) além do qual o escore diminui. O desafio, como antes, é determinar exatamente a localização desse pico, especialmente considerando que os escores de silhueta para nossas iterações variam muito mais do que nossos escores de inércia:
 
 # COMMAND ----------
 
-# DBTITLE 1,Silhouette Score over Cluster Count
-display(results_pd)
-
-# COMMAND ----------
-
-# MAGIC %md While providing a second perspective, the plot of silhouette scores reinforces the notion that selecting a number of clusters for K-means is a bit subjective.  Domain knowledge coupled with inputs from these and similar charts (such as a chart of the [Gap statistic](https://towardsdatascience.com/k-means-clustering-and-the-gap-statistics-4c5d414acd29)) may help point you towards an optimal cluster count but there are no widely-accepted, objective means of determining this value to date.
-# MAGIC 
-# MAGIC **NOTE** We need to be careful to avoid chasing the highest value for the silhouette score in the knee chart. Higher scores can be obtained with higher values of n by simply pushing outliers into trivially small clusters.
-# MAGIC 
-# MAGIC For our model, we'll go with a value of 2.  Looking at the plot of inertia, there appears to be evidence supporting this value.  Examining the silhouette scores, the clustering solution appears to be much more stable at this value than at values further down the range. To obtain domain knowledge, we might speak with our promotions experts and gain their perspective on not only how different households respond to promotions but what might be a workable number of clusters from this exercise.  But most importantly, from our visualization, the presence of 2 well-separated clusters seems to naturally jump out at us.
-# MAGIC 
-# MAGIC With a value for n identified, we now need to generate a final cluster design.  Given the randomness of the results we obtain from a K-means run (as captured in the widely variable silhouette scores), we might take a *best-of-k* approach to defining our cluster model.  In such an approach, we run through some number of K-means model runs and select the run that delivers the best result as measured by a metric such as silhouette score. To distribute this work, we'll implement a custom function that will allow us to task each worker with finding a best-of-k solution and then take the overall best solution from the results of that work:
-# MAGIC 
-# MAGIC **NOTE** We are again using an RDD to allow us to distribute the work across our cluster.  The *iterations* RDD will hold a value for each iteration to perform.  Using *mapPartitions()* we will determine how many iterations are assigned to a given partition and then force that worker to perform an appropriately configured best-of-k evaluation.  Each partition will send back the best model it could discover and then we will take the best from these.
+# MAGIC %md Embora forneça uma segunda perspectiva, o gráfico de escores de silhueta reforça a ideia de que a seleção do número de clusters para o K-means é um pouco subjetiva. O conhecimento de domínio aliado às informações desses e de outros gráficos semelhantes (como um gráfico da [estatística de lacuna](https://towardsdatascience.com/k-means-clustering-and-the-gap-statistics-4c5d414acd29)) podem ajudar a apontar para um número ótimo de clusters, mas até o momento não existem meios objetivos amplamente aceitos para determinar esse valor.
+# MAGIC
+# MAGIC **NOTA** Precisamos ter cuidado para evitar buscar o valor mais alto para o escore de silhueta no gráfico do joelho. Escores mais altos podem ser obtidos com valores mais altos de n, simplesmente empurrando os outliers para clusters trivialmente pequenos.
+# MAGIC
+# MAGIC Para o nosso modelo, vamos escolher um valor de 2. Ao olhar o gráfico de inércia, parece haver evidências que suportam esse valor. Ao examinar os escores de silhueta, a solução de clusterização parece ser muito mais estável nesse valor do que em valores mais baixos da faixa. Para obter conhecimento de domínio, podemos conversar com nossos especialistas em promoções e obter sua perspectiva não apenas sobre como diferentes domicílios respondem às promoções, mas também sobre qual número de clusters pode ser viável a partir desse exercício. Mas, o mais importante, a presença de 2 clusters bem separados parece naturalmente se destacar em nossa visualização.
+# MAGIC
+# MAGIC Com um valor para n identificado, agora precisamos gerar um design final de clusters. Dada a aleatoriedade dos resultados que obtemos de uma execução do K-means (conforme capturado nos escores de silhueta amplamente variáveis), podemos adotar uma abordagem de *melhor-de-k* para definir nosso modelo de cluster. Nessa abordagem, executamos várias vezes o modelo K-means e selecionamos a execução que oferece o melhor resultado, medido por uma métrica como o escore de silhueta. Para distribuir esse trabalho, implementaremos uma função personalizada que nos permitirá atribuir a cada trabalhador a tarefa de encontrar uma solução melhor-de-k e, em seguida, selecionar a melhor solução entre os resultados desse trabalho:
+# MAGIC
+# MAGIC **NOTA** Estamos usando novamente um RDD para nos permitir distribuir o trabalho em nosso cluster. O RDD *iterations* conterá um valor para cada iteração a ser realizada. Usando *mapPartitions()*, determinaremos quantas iterações são atribuídas a uma determinada partição e, em seguida, forçaremos esse trabalhador a realizar uma avaliação melhor-de-k adequadamente configurada. Cada partição enviará de volta o melhor modelo que pôde descobrir e, em seguida, selecionaremos o melhor entre eles.
 
 # COMMAND ----------
 
@@ -252,7 +245,7 @@ X_broadcast.unpersist()
 
 # COMMAND ----------
 
-# MAGIC %md We can now visualize our results to get a sense of how the clusters align with the structure of our data:
+# MAGIC %md Agora podemos visualizar nossos resultados para ter uma ideia de como os clusters se alinham com a estrutura dos nossos dados:
 
 # COMMAND ----------
 
@@ -261,8 +254,8 @@ X_broadcast.unpersist()
 fig, ax = plt.subplots(figsize=(10,8))
 sns.scatterplot(
   data=bestofk_labeled_X_pd,
-  x='Dim_1',
-  y='Dim_2',
+  x='Dim.1',
+  y='Dim.2',
   hue='cluster',
   palette=[cm.nipy_spectral(float(i) / n_for_bestofk) for i in range(n_for_bestofk)],  # align colors with those used in silhouette plots
   legend='brief',
@@ -273,9 +266,9 @@ _ = ax.legend(loc='lower right', ncol=1, fancybox=True)
 
 # COMMAND ----------
 
-# MAGIC %md The results of our analysis are not earth-shattering but they don't need to be.  Our data would indicate that for these features we could very reasonably consider our customer households as existing in two fairly distinct groups.  That said, we might want to look at how well individual households sit within these groups, which we can do through a per-instance silhouette chart:
-# MAGIC 
-# MAGIC **NOTE** This code represents a modified version of the [silhouette charts](https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html) provided in the Sci-Kit Learn documentation.
+# MAGIC %md Os resultados da nossa análise não são surpreendentes, mas não precisam ser. Nossos dados indicam que, para essas características, poderíamos considerar razoavelmente nossos clientes em dois grupos bastante distintos. No entanto, pode ser interessante analisar como cada cliente se encaixa nesses grupos, o que podemos fazer por meio de um gráfico de silhueta por instância:
+# MAGIC
+# MAGIC **NOTA** Este código representa uma versão modificada dos [gráficos de silhueta](https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html) fornecidos na documentação do Sci-Kit Learn.
 
 # COMMAND ----------
 
@@ -342,9 +335,9 @@ _ = plot_silhouette_chart(X, bestofk_clusters)
 
 # COMMAND ----------
 
-# MAGIC %md From the silhouette chart, we would appear to have one cluster a bit larger than the other.  That cluster appears to be reasonably coherent.  Our other clusters appear to be a bit more dispersed with a more rapid decline in silhouette score values ultimately leading a few members to have negative silhouette scores (indicating overlap with other cluster). 
-# MAGIC 
-# MAGIC This solution may be useful for better understanding customer behavior relative to promotional offers. We'll persist our cluster assignments before examining other clustering techniques:
+# MAGIC %md A partir do gráfico de silhueta, parece que temos um cluster um pouco maior que o outro. Esse cluster parece ser razoavelmente coerente. Nossos outros clusters parecem estar um pouco mais dispersos, com uma queda mais rápida nos valores de pontuação de silhueta, levando alguns membros a terem pontuações de silhueta negativas (indicando sobreposição com outro cluster).
+# MAGIC
+# MAGIC Essa solução pode ser útil para entender melhor o comportamento do cliente em relação a ofertas promocionais. Vamos persistir nossas atribuições de cluster antes de examinar outras técnicas de clustering:
 
 # COMMAND ----------
 
@@ -362,18 +355,18 @@ _ = plot_silhouette_chart(X, bestofk_clusters)
     .format('delta')
     .mode('overwrite')
     .option('overwriteSchema','true')
-    .save('/tmp/completejourney/gold/household_clusters/')
+    .saveAsTable('rodrigo_catalog.journey.household_clusters')
   )
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 3: Hierarchical Clustering
-# MAGIC 
-# MAGIC In addition to K-means, hierarchical clustering techniques are frequently used in customer segmentation exercises. With the agglomerative-variants of these techniques, clusters are formed by linking members closest to one another and then linking those clusters to form higher level clusters until a single cluster encompassing all the members of the set is formed.
-# MAGIC 
-# MAGIC Unlike K-means, the agglomerative process is deterministic so that repeated runs on the same dataset lead to the same clustering outcome. So while the hierarchical clustering techniques are frequently criticized for being slower than K-means, the overall processing time to arrive at a particular result may be lessened as no repeat executions of the algorithm are required to arrive at a *best-of* outcome.
-# MAGIC 
-# MAGIC To get a better sense of how this technique works, let's train a hierarchical clustering solution and visualize its output:
+# MAGIC %md ## Passo 3: Agrupamento Hierárquico
+# MAGIC
+# MAGIC Além do K-means, as técnicas de agrupamento hierárquico são frequentemente usadas em exercícios de segmentação de clientes. Com as variantes aglomerativas dessas técnicas, os clusters são formados ligando os membros mais próximos uns dos outros e, em seguida, ligando esses clusters para formar clusters de nível superior até que um único cluster que englobe todos os membros do conjunto seja formado.
+# MAGIC
+# MAGIC Ao contrário do K-means, o processo aglomerativo é determinístico, de modo que execuções repetidas no mesmo conjunto de dados levam ao mesmo resultado de agrupamento. Portanto, embora as técnicas de agrupamento hierárquico sejam frequentemente criticadas por serem mais lentas que o K-means, o tempo total de processamento para chegar a um resultado específico pode ser reduzido, pois não são necessárias execuções repetidas do algoritmo para chegar a um resultado "melhor".
+# MAGIC
+# MAGIC Para ter uma melhor compreensão de como essa técnica funciona, vamos treinar uma solução de agrupamento hierárquico e visualizar sua saída:
 
 # COMMAND ----------
 
@@ -425,20 +418,20 @@ _ = plt.xlabel('Number of points in node (or index of point if no parenthesis)')
 
 # COMMAND ----------
 
-# MAGIC %md The dendrogram is read from the bottom up.  Each initial point represents a cluster consisting of some number of members.  The entire process by which those members come together to form those specific clusters is not visualized (though you can adjust the *p* argument in the *plot_dendrograms* function to see further down into the process).
-# MAGIC 
-# MAGIC As you move up the dendrogram, clusters converge to form new clusters.  The vertical length traversed to reach that point of convergence tells us something about the distance between these clusters.  The longer the length, the wider the gap between the converging clusters.
-# MAGIC 
-# MAGIC The dendrogram gives us a sense of how the overall structure of the dataset comes together but it doesn't steer us towards a specific number of clusters for our ultimate clustering solution.  For that, we need to revert to the plotting of a metric, such as silhouette scores, to identify the appropriate number of clusters for our solution.
-# MAGIC 
-# MAGIC Before plotting silhouette against various numbers of clusters, it's important to examine the means by which clusters are combined to form new clusters.  There are many algorithms (*linkages*) for this.  The SciKit-Learn library supports four of them.  These are:
+# MAGIC %md O dendrograma é lido de baixo para cima. Cada ponto inicial representa um cluster composto por um certo número de membros. Todo o processo pelo qual esses membros se juntam para formar esses clusters específicos não é visualizado (embora você possa ajustar o argumento *p* na função *plot_dendrogram* para ver mais detalhes do processo).
+# MAGIC
+# MAGIC Conforme você sobe no dendrograma, os clusters convergem para formar novos clusters. O comprimento vertical percorrido para atingir esse ponto de convergência nos diz algo sobre a distância entre esses clusters. Quanto maior o comprimento, maior é a lacuna entre os clusters convergentes.
+# MAGIC
+# MAGIC O dendrograma nos dá uma ideia de como a estrutura geral do conjunto de dados se forma, mas não nos direciona para um número específico de clusters para nossa solução final de clustering. Para isso, precisamos recorrer à plotagem de uma métrica, como os escores de silhueta, para identificar o número apropriado de clusters para nossa solução.
+# MAGIC
+# MAGIC Antes de plotar a silhueta em relação a vários números de clusters, é importante examinar os meios pelos quais os clusters são combinados para formar novos clusters. Existem muitos algoritmos (*linkages*) para isso. A biblioteca SciKit-Learn suporta quatro deles. São eles:
 # MAGIC <p>
-# MAGIC * *ward* - link clusters such that the sum of squared distances within the newly formed clusters is minimized
-# MAGIC * *average* - link clusters based on the average distance between all points in the clusters
-# MAGIC * *single* - link clusters based on the minimum distance between any two points in the clusters
-# MAGIC * *complete* - link clusters based on the maximum distance between any two points in the clusters
-# MAGIC   
-# MAGIC Different linkage mechanisms can result in very different clustering outcomes. Ward's method (denoted by the *ward* linkage mechanism) is considered the go-to for most clustering exercises unless domain knowledge dictates the use of an alternative method:
+# MAGIC * *ward* - combina clusters de forma que a soma das distâncias quadradas dentro dos clusters recém-formados seja minimizada
+# MAGIC * *average* - combina clusters com base na distância média entre todos os pontos nos clusters
+# MAGIC * *single* - combina clusters com base na distância mínima entre quaisquer dois pontos nos clusters
+# MAGIC * *complete* - combina clusters com base na distância máxima entre quaisquer dois pontos nos clusters
+# MAGIC
+# MAGIC Mecanismos de ligação diferentes podem resultar em resultados de clustering muito diferentes. O método de Ward (denotado pelo mecanismo de ligação *ward*) é considerado o mais adequado para a maioria dos exercícios de clustering, a menos que o conhecimento do domínio indique o uso de um método alternativo:
 
 # COMMAND ----------
 
@@ -461,7 +454,7 @@ display(results_pd)
 
 # COMMAND ----------
 
-# MAGIC %md The results would indicate our best results may be found using 5 clusters:
+# MAGIC %md Os resultados indicam que nossos melhores resultados podem ser encontrados usando 5 clusters:
 
 # COMMAND ----------
 
@@ -491,7 +484,7 @@ besthc_labeled_X_pd = (
 
 # COMMAND ----------
 
-# MAGIC %md Visualizing these clusters, we can see how groupings reside within the data structure.  In our initial visualization of the features, we argued that there were two high-level clusters that stood out (and our K-means algorithm seemed to pick this up very well).  Here, our hierarchical clustering algorithm seems to have picked up on the looser subclusters a bit better, though it also seems to have picked up on some loosely organized households for one very small cluster:
+# MAGIC %md Ao visualizar esses clusters, podemos ver como os agrupamentos estão distribuídos dentro da estrutura dos dados. Em nossa visualização inicial das características, argumentamos que havia dois clusters de alto nível que se destacavam (e nosso algoritmo de K-means parece ter captado isso muito bem). Aqui, nosso algoritmo de agrupamento hierárquico parece ter captado melhor os subclusters mais soltos, embora também tenha captado algumas residências pouco organizadas para um cluster muito pequeno:
 
 # COMMAND ----------
 
@@ -500,8 +493,8 @@ besthc_labeled_X_pd = (
 fig, ax = plt.subplots(figsize=(10,8))
 sns.scatterplot(
   data=besthc_labeled_X_pd,
-  x='Dim_1',
-  y='Dim_2',
+  x='Dim.1',
+  y='Dim.2',
   hue='cluster',
   palette=[cm.nipy_spectral(float(i) / n_for_besthc) for i in range(n_for_besthc)],  # align colors with those used in silhouette plots
   legend='brief',
@@ -512,7 +505,7 @@ _ = ax.legend(loc='lower right', ncol=1, fancybox=True)
 
 # COMMAND ----------
 
-# MAGIC %md Our per-instance silhouette scores show us we have a bit more overlap between clusters when examined at this level.  One of the clusters has so few members it doesn't seem worth keeping it, especially when we review the 2-D visualization and see that these points seem to be highly intermixed with other clusters (at least when viewed from this perspective):
+# MAGIC %md Nossos escores de silhueta por instância mostram que temos um pouco mais de sobreposição entre os clusters quando examinados nesse nível. Um dos clusters tem tão poucos membros que não parece valer a pena mantê-lo, especialmente quando revisamos a visualização em 2D e vemos que esses pontos parecem estar altamente misturados com outros clusters (pelo menos quando vistos dessa perspectiva):
 
 # COMMAND ----------
 
@@ -521,7 +514,7 @@ _ = plot_silhouette_chart(X, besthc_clusters)
 
 # COMMAND ----------
 
-# MAGIC %md With that in mind, we'll retrain our model with a cluster count of 4 and then persist those results:
+# MAGIC %md Com isso em mente, vamos reajustar nosso modelo com uma contagem de cluster de 4 e, em seguida, persistir esses resultados:
 
 # COMMAND ----------
 
@@ -556,8 +549,8 @@ besthc_labeled_X_pd = (
 fig, ax = plt.subplots(figsize=(10,8))
 sns.scatterplot(
   data=besthc_labeled_X_pd,
-  x='Dim_1',
-  y='Dim_2',
+  x='Dim.1',
+  y='Dim.2',
   hue='cluster',
   palette=[cm.nipy_spectral(float(i) / n_for_besthc) for i in range(n_for_besthc)],  # align colors with those used in silhouette plots
   legend='brief',
@@ -577,7 +570,7 @@ _ = plot_silhouette_chart(X, besthc_clusters)
 # add column to previously created table to allow assignment of cluster ids
 # try/except used here in case this statement is being rurun against a table with field already in place
 try:
-  spark.sql('ALTER TABLE DELTA.`/tmp/completejourney/gold/household_clusters/` ADD COLUMN (hc_cluster integer)')
+  spark.sql('ALTER TABLE rodrigo_catalog.journey.household_clusters ADD COLUMN (hc_cluster integer)')
 except:
   pass  
 
@@ -596,7 +589,7 @@ updates = (
   )
 
 # merge new cluster ID data with existing table  
-deltaTable = DeltaTable.forPath(spark, '/tmp/completejourney/gold/household_clusters/')
+deltaTable = DeltaTable.forName(spark, 'rodrigo_catalog.journey.household_clusters')
 
 (
   deltaTable.alias('target')
@@ -610,8 +603,8 @@ deltaTable = DeltaTable.forPath(spark, '/tmp/completejourney/gold/household_clus
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 4: Other Techniques
-# MAGIC 
-# MAGIC We have only begun to scratch the surface on the clustering techniques available to us.  [K-Medoids](https://scikit-learn-extra.readthedocs.io/en/latest/generated/sklearn_extra.cluster.KMedoids.html), a variation of K-means which centers clusters on actual members in the dataset, allows for alternative methods (other than just Euclidean distance) of considering member similarities and may be more robust to noise and outliers in a dataset. [Density-Based Spatial Clustering of Applications with Noise (DBSCAN)](https://scikit-learn.org/stable/modules/clustering.html#dbscan) is another interesting clustering technique which identifies clusters in areas of high member density while ignoring dispersed members in lower-density regions. This would seem to be a good technique for this dataset but in our examination of DBSCAN (not shown), we had difficulty tuning the *epsilon* and *minimum sample count* parameters (that control how high-density regions are identified) to produce a high-quality clustering solution. And [Gaussian Mixture Models](https://scikit-learn.org/stable/modules/mixture.html#gaussian-mixture-models) offer still another approach popular in segmentation exercises which allows clusters with non-spherical shapes to be more easily formed.
-# MAGIC 
-# MAGIC In addition to alternative algorithms, there is emerging work in the development of cluster ensemble models (aka *consensus clustering*). First introduced by [Monti *et al.*](https://link.springer.com/article/10.1023/A:1023949509487) for application in genomics research, consensus clustering has found popularity in a broad range of life science applications though there appears to be little adoption to date in the area of customer segmentation. Support for consensus clustering through the [OpenEnsembles](https://www.jmlr.org/papers/v19/18-100.html) and [kemlglearn](https://nbviewer.jupyter.org/github/bejar/URLNotebooks/blob/master/Notebooks/12ConsensusClustering.ipynb) packages is available in Python though much more robust support for consensus clustering can be found in R libraries such as [diceR](https://cran.r-project.org/web/packages/diceR/index.html). A limited exploration of these packages and libraries (not shown) produced mixed results though we suspect this has more to do with our own challenges with hyperparameter tuning and less to do with the algorithms themselves.
+# MAGIC %md ## Passo 4: Outras Técnicas
+# MAGIC
+# MAGIC Apenas começamos a explorar as técnicas de agrupamento disponíveis para nós. [K-Medoids](https://scikit-learn-extra.readthedocs.io/en/latest/generated/sklearn_extra.cluster.KMedoids.html), uma variação do K-means que centraliza os clusters em membros reais do conjunto de dados, permite considerar métodos alternativos (além da distância euclidiana) para avaliar a similaridade entre membros e pode ser mais robusto a ruídos e outliers em um conjunto de dados. [Density-Based Spatial Clustering of Applications with Noise (DBSCAN)](https://scikit-learn.org/stable/modules/clustering.html#dbscan) é outra técnica interessante de agrupamento que identifica clusters em áreas de alta densidade de membros, ignorando membros dispersos em regiões de baixa densidade. Essa técnica parece ser adequada para este conjunto de dados, mas ao examinar o DBSCAN (não mostrado), tivemos dificuldade em ajustar os parâmetros *epsilon* e *contagem mínima de amostras* (que controlam como as regiões de alta densidade são identificadas) para obter uma solução de agrupamento de alta qualidade. E [Gaussian Mixture Models](https://scikit-learn.org/stable/modules/mixture.html#gaussian-mixture-models) oferecem ainda outra abordagem popular em exercícios de segmentação, permitindo a formação de clusters com formas não esféricas de maneira mais fácil.
+# MAGIC
+# MAGIC Além de algoritmos alternativos, há um trabalho emergente no desenvolvimento de modelos de conjunto de clusters (também conhecidos como *consensus clustering*). Introduzido pela primeira vez por [Monti *et al.*](https://link.springer.com/article/10.1023/A:1023949509487) para aplicação em pesquisas genômicas, o consensus clustering tem se tornado popular em uma ampla gama de aplicações nas ciências da vida, embora pareça haver pouca adoção até o momento na área de segmentação de clientes. O suporte para consensus clustering por meio dos pacotes [OpenEnsembles](https://www.jmlr.org/papers/v19/18-100.html) e [kemlglearn](https://nbviewer.jupyter.org/github/bejar/URLNotebooks/blob/master/Notebooks/12ConsensusClustering.ipynb) está disponível em Python, embora um suporte mais robusto para consensus clustering possa ser encontrado em bibliotecas R, como [diceR](https://cran.r-project.org/web/packages/diceR/index.html). Uma exploração limitada desses pacotes e bibliotecas (não mostrada) produziu resultados mistos, embora suspeitemos que isso tenha mais a ver com nossos próprios desafios de ajuste de hiperparâmetros e menos com os algoritmos em si.
